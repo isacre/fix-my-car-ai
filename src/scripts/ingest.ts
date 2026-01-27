@@ -34,7 +34,7 @@ async function fetchWikipediaPlainText(title: string) {
  * ```
  * @returns An array of titles to the relevant subtopics
  */
-async function getSubtopicsLinks(title: string): Promise<string[]> {
+async function getSubtopics(title: string): Promise<string[]> {
     const html = await fetchWikipediaHTML(title);
 
     const categoriesToRemove = [
@@ -58,8 +58,11 @@ async function getSubtopicsLinks(title: string): Promise<string[]> {
 
 
 
-
-
+///==== General Information ====
+///lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+///Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+///Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+///Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 
 /**
  * Get the chunks and metadata for the given text
@@ -73,8 +76,7 @@ export function getChunksAndMetadata(text: string) {
 
     const documents: string[] = [];
     const metadata: any[] = [];
-
-    let currentCategory = 'General';
+    let currentCategory = '';
 
     // Process the array: pair index are content, odd index are titles
     for (let i = 0; i < chunks.length; i++) {
@@ -95,10 +97,10 @@ export function getChunksAndMetadata(text: string) {
 
 
 
-export async function ingest(title: string) {
+export async function ingest(title: string, chunkMaxLength: number = 1000, chunkOverlap: number = 100) {
     const app = await NestFactory.createApplicationContext(AppModule);
     const service = app.get(ChromaService);
-    const links = await getSubtopicsLinks(title);
+    const links = await getSubtopics(title);
 
     console.log(`Found ${links.length} topics to process`);
 
@@ -115,25 +117,15 @@ export async function ingest(title: string) {
         try {
             const text = await fetchWikipediaPlainText(topic);
             const { chunks, metadata } = getChunksAndMetadata(text);
-
             console.log(`  - Generated ${chunks.length} chunks`);
-
-            if (chunks.length === 0) {
-                console.log(`  - Skipping: no chunks found`);
-                continue;
-            }
-
             const enrichedMetadata = metadata.map((meta, idx) => ({
                 ...meta,
                 topic: topic,
                 chunkIndex: idx
             }));
 
-            // Gera IDs únicos incluindo o contexto (tópico + categoria + índice + conteúdo)
-            const ids = chunks.map((chunk, idx) => {
-                const idString = `${topic}||${enrichedMetadata[idx].category}||${idx}||${chunk}`;
-                const id = generateID(idString);
-
+            const ids = chunks.map((chunk) => {
+                const id = generateID(chunk);
                 if (allGeneratedIDs.has(id)) {
                     const count = duplicateChunks.get(id) || 0;
                     duplicateChunks.set(id, count + 1);
@@ -161,11 +153,8 @@ export async function ingest(title: string) {
     console.log(`Total topics processed: ${links.length}`);
     console.log(`Successful: ${totalSuccessCount}`);
     console.log(`Errors: ${totalErrorCount}`);
-    console.log(`Total documents attempted: ${totalDocumentsAdded}`);
-    console.log(`Unique IDs generated: ${allGeneratedIDs.size}`);
-    console.log(`Total duplicates detected: ${Array.from(duplicateChunks.values()).reduce((a, b) => a + b, 0)}`);
-    console.log(`\nExpected documents in DB: ${allGeneratedIDs.size} (may differ due to upsert behavior)`);
 
     await app.close();
 }
 
+ingest('Honda_Civic')

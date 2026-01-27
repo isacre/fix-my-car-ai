@@ -38,9 +38,6 @@ export class ChromaService implements OnModuleInit {
 
     async addDocuments(documents: string[], metadatas: Metadata[] = [], ids: string[]) {
         try {
-            if (documents.length !== ids.length || documents.length !== metadatas.length) {
-                throw new Error(`Mismatch: documents=${documents.length}, ids=${ids.length}, metadatas=${metadatas.length}`);
-            }
             return await this.collection.upsert({
                 ids: ids,
                 documents: documents,
