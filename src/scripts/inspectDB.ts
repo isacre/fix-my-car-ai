@@ -8,9 +8,9 @@ async function inspectChromaDB() {
 
     try {
         const count = await service.count();
-        console.log(`📊 Total de documentos no banco: ${count}\n`);
+        console.log(`📊 Total documents in the database: ${count}\n`);
     } catch (error) {
-        console.error('❌ Erro ao inspecionar ChromaDB:', error);
+        console.error('❌ Error inspecting ChromaDB:', error);
     } finally {
         await app.close();
     }

@@ -66,29 +66,11 @@ export class ChromaService implements OnModuleInit {
         });
     }
 
-    async peek() {
-        return await this.collection.peek({ limit: 100 });
-    }
-
-
     async count(): Promise<number> {
         try {
             return await this.collection.count();
         } catch (error) {
             throw new InternalServerErrorException('Failed to count documents', error);
-        }
-    }
-
-    async getAll(limit?: number) {
-        try {
-            const totalCount = await this.collection.count();
-            const actualLimit = limit || totalCount;
-
-            return await this.collection.get({
-                limit: actualLimit
-            });
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to get all documents', error);
         }
     }
 }
