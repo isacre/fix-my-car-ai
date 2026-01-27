@@ -5,6 +5,8 @@ import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SYSTEM_PROMPT } from './system_prompt';
+import { ChromaService } from 'src/chroma/chroma.service';
+import { tool } from "langchain"
 
 @Injectable()
 export class AIService implements OnModuleInit {
@@ -13,14 +15,16 @@ export class AIService implements OnModuleInit {
 
     constructor(
         private readonly configService: ConfigService,
+        private readonly chromaService: ChromaService,
     ) { }
+
 
     async onModuleInit() {
         try {
             const memory = new MemorySaver();
             const model = new ChatOpenAI({
                 model: "gpt-4o-mini",
-                temperature: 0,
+                temperature: 0.5,
                 openAIApiKey: this.configService.get('OPENAI_API_KEY'),
             });
 
@@ -51,4 +55,6 @@ export class AIService implements OnModuleInit {
             throw new InternalServerErrorException('Failed to generate response');
         }
     }
+
+
 }

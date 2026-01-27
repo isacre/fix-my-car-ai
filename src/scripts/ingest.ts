@@ -3,8 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../app.module";
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-
-
+import { generateID } from '../utils';
 
 async function fetchWikipediaHTML(title: string): Promise<string> {
     const url = `https://en.wikipedia.org/w/api.php`;
@@ -25,7 +24,6 @@ async function fetchWikipediaPlainText(title: string) {
     const value = Object.values(data.query.pages) as { extract: string }[];
     return value[0].extract;
 }
-
 
 /**
  * In the HTML page, get the links to the subtopics that contain the given title 
@@ -72,23 +70,25 @@ async function getSubtopicsLinks(title: string): Promise<string[]> {
 export function getChunksAndMetadata(text: string) {
     const regex = /==+\s*(.*?)\s*==+/g;
     const chunks = text.split(regex);
-    const documents = chunks.map((chunk, index) => {
-        const title = index % 2 !== 0
-        if (!title) {
-            return chunk.trim().replace("\n", "");
-        }
-    }).filter(Boolean);
 
-    const metadata = chunks.map((document, index) => {
-        const title = index % 2 !== 0
-        if (title) {
-            return {
-                category: document.replace("=", "").trim()
+    const documents: string[] = [];
+    const metadata: any[] = [];
+
+    let currentCategory = 'General';
+
+    // Process the array: pair index are content, odd index are titles
+    for (let i = 0; i < chunks.length; i++) {
+        const content = i % 2 === 0;
+        if (content) {
+            const content = chunks[i].trim().replace(/\n+/g, ' ').replace(/\s+/g, ' ');
+            if (content && content.length > 0) {
+                documents.push(content);
+                metadata.push({ category: currentCategory });
             }
         } else {
-            return null;
+            currentCategory = chunks[i].trim();
         }
-    }).filter(Boolean);
+    }
 
     return { chunks: documents, metadata };
 }
@@ -100,24 +100,72 @@ export async function ingest(title: string) {
     const service = app.get(ChromaService);
     const links = await getSubtopicsLinks(title);
 
+    console.log(`Found ${links.length} topics to process`);
+
+    let totalSuccessCount = 0;
+    let totalErrorCount = 0;
+    let totalDocumentsAdded = 0;
+    const allGeneratedIDs = new Set<string>();
+    const duplicateChunks = new Map<string, number>();
+
     for (let i = 0; i < links.length; i++) {
-        let successCount = 0;
-        let errorCount = 0;
         const topic = links[i];
-        const text = await fetchWikipediaPlainText(topic);
-        const { chunks, metadata } = getChunksAndMetadata(text);
+        console.log(`\nProcessing topic ${i + 1}/${links.length}: ${topic}`);
+
         try {
-            await service.addDocuments(chunks as string[], metadata as any[]);
-            successCount++;
-            console.log(`${successCount} documents added successfully for ${topic}`);
+            const text = await fetchWikipediaPlainText(topic);
+            const { chunks, metadata } = getChunksAndMetadata(text);
+
+            console.log(`  - Generated ${chunks.length} chunks`);
+
+            if (chunks.length === 0) {
+                console.log(`  - Skipping: no chunks found`);
+                continue;
+            }
+
+            const enrichedMetadata = metadata.map((meta, idx) => ({
+                ...meta,
+                topic: topic,
+                chunkIndex: idx
+            }));
+
+            // Gera IDs únicos incluindo o contexto (tópico + categoria + índice + conteúdo)
+            const ids = chunks.map((chunk, idx) => {
+                const idString = `${topic}||${enrichedMetadata[idx].category}||${idx}||${chunk}`;
+                const id = generateID(idString);
+
+                if (allGeneratedIDs.has(id)) {
+                    const count = duplicateChunks.get(id) || 0;
+                    duplicateChunks.set(id, count + 1);
+                } else {
+                    allGeneratedIDs.add(id);
+                }
+
+                return id;
+            });
+
+            const uniqueIdsCount = new Set(ids).size;
+
+            await service.addDocuments(chunks as string[], enrichedMetadata as any[], ids);
+            totalSuccessCount++;
+            totalDocumentsAdded += chunks.length;
+            console.log(`  ✓ Successfully added ${chunks.length} documents (${uniqueIdsCount} unique IDs)`);
         } catch (error) {
-            errorCount++;
-            console.log(`${errorCount} documents failed to add for ${topic}`);
+            totalErrorCount++;
+            console.error(`  ✗ Error processing ${topic}:`, error.message);
             continue;
         }
     }
 
+    console.log(`\n=== Summary ===`);
+    console.log(`Total topics processed: ${links.length}`);
+    console.log(`Successful: ${totalSuccessCount}`);
+    console.log(`Errors: ${totalErrorCount}`);
+    console.log(`Total documents attempted: ${totalDocumentsAdded}`);
+    console.log(`Unique IDs generated: ${allGeneratedIDs.size}`);
+    console.log(`Total duplicates detected: ${Array.from(duplicateChunks.values()).reduce((a, b) => a + b, 0)}`);
+    console.log(`\nExpected documents in DB: ${allGeneratedIDs.size} (may differ due to upsert behavior)`);
+
     await app.close();
 }
 
-ingest('Honda_Civic');

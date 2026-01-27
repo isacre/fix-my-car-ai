@@ -1,9 +1,7 @@
 import { OpenAIEmbeddingFunction } from '@chroma-core/openai';
-import { Injectable, OnModuleInit, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChromaClient, Collection, Metadata } from "chromadb";
-import { generateID } from 'src/utils';
-import { v4 } from 'uuid';
 
 @Injectable()
 export class ChromaService implements OnModuleInit {
@@ -38,16 +36,18 @@ export class ChromaService implements OnModuleInit {
     }
 
 
-
-    async addDocuments(documents: string[], metadatas: Metadata[] = []) {
+    async addDocuments(documents: string[], metadatas: Metadata[] = [], ids: string[]) {
         try {
+            if (documents.length !== ids.length || documents.length !== metadatas.length) {
+                throw new Error(`Mismatch: documents=${documents.length}, ids=${ids.length}, metadatas=${metadatas.length}`);
+            }
             return await this.collection.upsert({
-                ids: documents.map((chunk) => generateID(chunk)),
+                ids: ids,
                 documents: documents,
                 metadatas: metadatas
             })
         } catch (error) {
-            throw new InternalServerErrorException('Failed to add documents', error);
+            throw new InternalServerErrorException('Failed to add documents with custom IDs', error);
         }
 
     }
