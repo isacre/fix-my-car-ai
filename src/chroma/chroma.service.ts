@@ -1,11 +1,15 @@
-import { Injectable, OnModuleInit, InternalServerErrorException } from '@nestjs/common';
+import { OpenAIEmbeddingFunction } from '@chroma-core/openai';
+import { Injectable, OnModuleInit, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChromaClient, Collection } from "chromadb";
+import { ChromaClient, Collection, Metadata } from "chromadb";
+import { generateID } from 'src/utils';
+import { v4 } from 'uuid';
 
 @Injectable()
 export class ChromaService implements OnModuleInit {
     private client: ChromaClient;
     private collection: Collection;
+    private readonly logger = new Logger(ChromaService.name);
 
     constructor(private configService: ConfigService) {
 
@@ -18,20 +22,29 @@ export class ChromaService implements OnModuleInit {
             });
 
             this.collection = await this.client.getOrCreateCollection({
-                name: 'cars-data-collection',
+                name: 'cars-data',
+                embeddingFunction: new OpenAIEmbeddingFunction({
+                    modelName: 'text-embedding-3-small',
+                    apiKey: this.configService.get('OPENAI_API_KEY'),
+                })
             });
+
+            this.logger.log('ChromaDB collection initialized successfully');
+
         } catch (error) {
+            this.logger.error('Failed to initialize ChromaDB', error.stack);
             throw new InternalServerErrorException('Failed to initialize ChromaDB', error);
         }
     }
 
 
 
-    async addDocuments(documents: string[], ids: string[]) {
+    async addDocuments(documents: string[], metadatas: Metadata[] = []) {
         try {
             return await this.collection.upsert({
-                ids: ids,
-                documents: documents
+                ids: documents.map((chunk) => generateID(chunk)),
+                documents: documents,
+                metadatas: metadatas
             })
         } catch (error) {
             throw new InternalServerErrorException('Failed to add documents', error);
@@ -48,5 +61,15 @@ export class ChromaService implements OnModuleInit {
         } catch (error) {
             throw new InternalServerErrorException('Failed to query documents', error);
         }
+    }
+
+    async deleteCollection() {
+        return await this.client.deleteCollection({
+            name: 'cars-data',
+        });
+    }
+
+    async peek() {
+        return await this.collection.peek({ limit: 10 });
     }
 }

@@ -33,4 +33,10 @@ Respond objectively when there is no relevant context, and encourage the user to
 
 ## Rephrase negative evidence
 Replace phrases like "There is no direct evidence" with alternatives like "I couldn't find evidence for that in the retrieved context."
+
+## Context
+{context}
+
+## Question
+{query}
 `

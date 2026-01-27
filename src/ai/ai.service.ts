@@ -1,48 +1,54 @@
-import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { Tool } from '@langchain/core/tools';
+import { CompiledStateGraph, MemorySaver } from "@langchain/langgraph";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from '@langchain/openai';
 import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChromaService } from 'src/chroma/chroma.service';
 import { SYSTEM_PROMPT } from './system_prompt';
 
 @Injectable()
 export class AIService implements OnModuleInit {
-    private model: ChatOpenAI;
+    private agent: CompiledStateGraph<any, any, any, any, any, any, any, any, any>;
+    private tools: Tool[] = [];
+
     constructor(
         private readonly configService: ConfigService,
-        private readonly chromaService: ChromaService
     ) { }
 
     async onModuleInit() {
         try {
-            this.model = new ChatOpenAI({
+            const memory = new MemorySaver();
+            const model = new ChatOpenAI({
                 model: "gpt-4o-mini",
                 temperature: 0,
                 openAIApiKey: this.configService.get('OPENAI_API_KEY'),
-            })
+            });
+
+            this.agent = createReactAgent({
+                llm: model,
+                tools: this.tools,
+                checkpointSaver: memory,
+                messageModifier: SYSTEM_PROMPT,
+            });
+
         } catch (error) {
-            console.log("Error initializing agent", error);
             throw new InternalServerErrorException('Failed to initialize agent', error);
         }
-
     }
 
-    async generateResponse(query: string) {
+    async generateResponse(message: string, threadId: string) {
         try {
-            const context = await this.chromaService.queryDocuments(query);
-            const prompt = ChatPromptTemplate.fromMessages([
-                ["system", SYSTEM_PROMPT],
-                ["user", "Context: {context}\n\nQuestion: {query}"],
-            ]);
-            const chain = prompt.pipe(this.model);
-            const response = await chain.invoke({
-                context: context.documents,
-                query: query,
-            });
-            return response.content;
+            const config = { configurable: { thread_id: threadId } };
+            const result = await this.agent.invoke(
+                { messages: [{ role: "user", content: message }] },
+                config
+            );
+
+            return result.messages[result.messages.length - 1].content;
+
         } catch (error) {
             console.log("Error generating response", error);
-            throw new InternalServerErrorException('Failed to generate response', error);
+            throw new InternalServerErrorException('Failed to generate response');
         }
     }
 }
