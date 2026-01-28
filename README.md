@@ -1,6 +1,8 @@
-# Fix My Car AI
 
-An AI-powered car repair assistant built with NestJS, LangChain, and ChromaDB. The application uses a conversational AI agent to answer car-related questions by searching through a vector database of car information.
+# Fix My Car AI
+## 📽 Project Demo
+
+[![Watch the demo](https://img.youtube.com/vi/GIsSCbKAi7U/0.jpg)](https://www.youtube.com/watch?v=GIsSCbKAi7U)
 
 ## Features
 
