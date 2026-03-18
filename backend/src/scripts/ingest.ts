@@ -4,7 +4,7 @@ import { AppModule } from "../app.module";
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { generateID } from '../utils';
-
+import fs from 'fs';
 async function fetchWikipediaHTML(title: string): Promise<string> {
     const url = `https://en.wikipedia.org/w/api.php`;
     const { data } = await axios.get(url, {
@@ -70,7 +70,7 @@ async function getSubtopics(title: string): Promise<string[]> {
  * @returns An object with the chunks and metadata
  * @metadata {category: string} (== Honda_Civic ==)
  */
-export function getChunksAndMetadata(text: string) {
+export function getChunksAndMetadata(text: string, vehicle: string) {
     const regex = /==+\s*(.*?)\s*==+/g;
     const chunks = text.split(regex);
 
@@ -85,7 +85,7 @@ export function getChunksAndMetadata(text: string) {
             const content = chunks[i].trim().replace(/\n+/g, ' ').replace(/\s+/g, ' ');
             if (content && content.length > 0) {
                 documents.push(content);
-                metadata.push({ category: currentCategory });
+                metadata.push({ category: currentCategory, vehicle: vehicle });
             }
         } else {
             currentCategory = chunks[i].trim();
@@ -97,7 +97,7 @@ export function getChunksAndMetadata(text: string) {
 
 
 
-export async function ingest(title: string, chunkMaxLength: number = 1000, chunkOverlap: number = 100) {
+export async function ingest(title: string) {
     const app = await NestFactory.createApplicationContext(AppModule);
     const service = app.get(ChromaService);
     const links = await getSubtopics(title);
@@ -116,7 +116,7 @@ export async function ingest(title: string, chunkMaxLength: number = 1000, chunk
 
         try {
             const text = await fetchWikipediaPlainText(topic);
-            const { chunks, metadata } = getChunksAndMetadata(text);
+            const { chunks, metadata } = getChunksAndMetadata(text, topic);
             console.log(`  - Generated ${chunks.length} chunks`);
             const enrichedMetadata = metadata.map((meta, idx) => ({
                 ...meta,
@@ -153,8 +153,20 @@ export async function ingest(title: string, chunkMaxLength: number = 1000, chunk
     console.log(`Total topics processed: ${links.length}`);
     console.log(`Successful: ${totalSuccessCount}`);
     console.log(`Errors: ${totalErrorCount}`);
-
     await app.close();
 }
 
-ingest('Honda_Civic')
+async function openTxt(path: string) {
+    const app = await NestFactory.createApplicationContext(AppModule);
+    const service = app.get(ChromaService);
+    const txt = fs.readFileSync(path, 'utf8');
+    const { chunks, metadata } = getChunksAndMetadata(txt, 'Sandero RS 2.0');
+    console.log(chunks);
+    console.log(metadata);
+    const ids = chunks.map((chunk) => generateID(chunk));
+    await service.addDocuments(chunks as string[], metadata as any[], ids as string[]);
+    await app.close();
+}
+
+openTxt('./src/scripts/txt/data.txt');
+
