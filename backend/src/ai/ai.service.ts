@@ -1,3 +1,4 @@
+import { StructuredTool } from '@langchain/core/tools';
 import { MemorySaver } from '@langchain/langgraph';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { ChatOpenAI } from '@langchain/openai';
@@ -9,8 +10,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ChromaService } from 'src/chroma/chroma.service';
 import { SYSTEM_PROMPT } from './system_prompt';
-import { tool, StructuredTool } from '@langchain/core/tools';
-import { z } from 'zod';
 import { createAITools } from './tools';
 
 @Injectable()
